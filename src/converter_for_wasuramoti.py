@@ -53,8 +53,9 @@ logger = logging.getLogger(__name__)
 FFMPEG_executable_name = "ffmpeg"
 FFMEPG_marker = b"ffmpeg"
 
+default_prefix = 'serino'
 default_source_directory = Path('./source')
-default_dest_directory = Path('./wasuramoti_reader/serino')
+default_dest_directory = Path('./wasuramoti_reader/' + default_prefix)
 
 
 def generate_file(ffmpeg: Path, source: Path, dest: Path, start_time: str, end_time: str) -> None:
@@ -91,15 +92,15 @@ def detect_silence(ffmpeg: Path, source: Path, silence_threshold, silence_durati
     return silent_parts
 
 
-def split_and_generate_file(ffmpeg: Path, head: str, src: Path, dest_dir: Path):
+def split_and_generate_file(ffmpeg: Path, head: str, src: Path, dest_dir: Path, prefix: str):
     
     silences = detect_silence(ffmpeg, src, '-50dB', '0.4')
     if len(silences) != 4:
         logger.warning("File {} could be split at unexpected points".format(str(src)))
         logger.debug("silences: {}".format(silences))
 
-    generate_file(ffmpeg, src, dest_dir / (head + "_1.ogg"), silences[0]["end"], silences[1]["start"])
-    generate_file(ffmpeg, src, dest_dir / (head + "_2.ogg"), silences[1]["end"], silences[2]["start"])
+    generate_file(ffmpeg, src, dest_dir / ("{}_{}_1.ogg".format(prefix, head)), silences[0]["end"], silences[1]["start"])
+    generate_file(ffmpeg, src, dest_dir / ("{}_{}_2.ogg".format(prefix, head)), silences[1]["end"], silences[2]["start"])
 
 
 def validate_dir_path(msg: str, d: Path) -> bool:
@@ -117,7 +118,7 @@ def validate_dir_path(msg: str, d: Path) -> bool:
     return True
 
 
-def convert_files_main(ffmpeg: Path, src_dir: Path, dest_dir: Path):
+def convert_files_main(ffmpeg: Path, src_dir: Path, dest_dir: Path, reader_name: str):
     """Generate sound files for Wasramoti
 
     """
@@ -157,8 +158,8 @@ def convert_files_main(ffmpeg: Path, src_dir: Path, dest_dir: Path):
     if source_files["000"] is not None:
         logger.info("Processing {}...".format("000"))
         
-        generate_file(ffmpeg, source_files["000"], dest_path / "000_1.ogg", "0:0.53", "0:16.62")
-        generate_file(ffmpeg, source_files["000"], dest_path / "000_2.ogg", "0:17.93", "0:25.98")
+        generate_file(ffmpeg, source_files["000"], dest_path / (reader_name + "_000_1.ogg"), "0:0.53", "0:16.62")
+        generate_file(ffmpeg, source_files["000"], dest_path / (reader_name + "_000_2.ogg"), "0:17.93", "0:25.98")
     else:
         logger.info("Skipped: {}".format("000"))
     
@@ -168,7 +169,7 @@ def convert_files_main(ffmpeg: Path, src_dir: Path, dest_dir: Path):
         head = "{:03d}".format(i + 1)
         if head in source_files and source_files[head] is not None:
             logger.info("Processing {}...".format(head))
-            split_and_generate_file(ffmpeg, head, source_files[head], dest_path)
+            split_and_generate_file(ffmpeg, head, source_files[head], dest_path, reader_name)
         else:
             logger.info("Skipped: {}".format(head))
 
@@ -221,6 +222,9 @@ def main(argv) -> int:
     parser.add_argument('--dst', type=Path, nargs='?', metavar='DIR',
                         const=default_dest_directory, default=default_dest_directory,
                         help='directory where generated files are stored')
+    parser.add_argument('--prefix', type=str, nargs='?', metavar='NAME',
+                        const=default_prefix, default=default_prefix,
+                        help='prefix string for each sound file (default: {})'.format((default_prefix)))
     parser.add_argument('--ffmpeg-path', type=Path, nargs='?', metavar='FILE', default=None,
                         help='path to ffmpeg executable')
     parser.add_argument('-d', '--debug', action='store_true',
@@ -238,7 +242,7 @@ def main(argv) -> int:
 
     # create destination directory
     params.dst.mkdir(parents=True, exist_ok=True)
-    convert_files_main(ffmpeg, params.src, params.dst)
+    convert_files_main(ffmpeg, params.src, params.dst, params.prefix)
     return 0
 
 
